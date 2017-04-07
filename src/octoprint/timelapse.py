@@ -17,6 +17,7 @@ except ImportError:
 	import Queue as queue
 import requests
 
+import octoprint.plugin
 import octoprint.util as util
 
 from octoprint.settings import settings
@@ -344,6 +345,8 @@ class Timelapse(object):
 
 		self._fps = fps
 
+
+		self._pluginManager = octoprint.plugin.plugin_manager()
 		self._pre_capture_hooks = self._pluginManager.get_hooks("octoprint.timelapse.capture.pre")
 		self._post_capture_hooks = self._pluginManager.get_hooks("octoprint.timelapse.capture.post")
 
@@ -559,7 +562,7 @@ class Timelapse(object):
 		# pre-capture hook
 		for name, hook in self._pre_capture_hooks.items():
 			try:
-				hook(self, filename)
+				hook(filename)
 			except:
 				self._logger.exception("Error while processing hook {name}.".format(**locals()))
 
@@ -579,15 +582,15 @@ class Timelapse(object):
 		except Exception as e:
 			self._logger.exception("Could not capture image {} from {}".format(filename, self._snapshot_url))
 			self._capture_errors += 1
-			success = True
+			success = False
 		else:
 			self._capture_success += 1
-			success = False
+			success = True
 
 		# post-capture hook
 		for name, hook in self._post_capture_hooks.items():
 			try:
-				hook(self, filename, success)
+				hook(filename, success)
 			except:
 				self._logger.exception("Error while processing hook {name}.".format(**locals()))
 
