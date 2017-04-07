@@ -943,7 +943,7 @@ octoprint.timelapse.capture.pre
 octoprint.timelapse.capture.post
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. py:function:: capture_pre_hook(filename, success)
+.. py:function:: capture_post_hook(filename, success)
 
    Perform specific actions after capturing a timelapse frame.
 
