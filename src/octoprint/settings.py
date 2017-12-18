@@ -222,6 +222,7 @@ default_settings = {
 		"modelSizeDetection": True,
 		"firmwareDetection": True,
 		"printCancelConfirmation": True,
+		"disconnectConfirmation": True,
 		"blockWhileDwelling": False,
 		"g90InfluencesExtruder": False
 	},

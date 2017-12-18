@@ -23,6 +23,13 @@
     <div class="control-group">
         <div class="controls">
             <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_disconnectConfirmation" id="settings-disconnectConfirmation"> {{ _('Confirm before disconnecting from printer') }}
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
                 <input type="checkbox" data-bind="checked: feature_sdSupport" id="settings-featureSdSupport"> {{ _('Enable SD support') }}
             </label>
         </div>

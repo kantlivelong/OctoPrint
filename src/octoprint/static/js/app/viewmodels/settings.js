@@ -148,6 +148,7 @@ $(function() {
         self.feature_modelSizeDetection = ko.observable(undefined);
         self.feature_firmwareDetection = ko.observable(undefined);
         self.feature_printCancelConfirmation = ko.observable(undefined);
+        self.feature_disconnectConfirmation = ko.observable(undefined);
         self.feature_blockWhileDwelling = ko.observable(undefined);
         self.feature_g90InfluencesExtruder = ko.observable(undefined);
 

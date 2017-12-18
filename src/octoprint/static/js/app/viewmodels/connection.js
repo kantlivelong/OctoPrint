@@ -125,8 +125,23 @@ $(function() {
                         self.settings.printerProfiles.requestData();
                     });
             } else {
-                self.requestData();
-                OctoPrint.connection.disconnect();
+                if (!self.settings.feature_disconnectConfirmation()) {
+                    self.requestData();
+                    OctoPrint.connection.disconnect();
+                } else {
+                    showConfirmationDialog({
+                        title: gettext("Print in progress"),
+                        message: gettext("<p><strong>You are about to disconnect your printer from OctoPrint</strong></p><p>Disconnecting while a print is in progress will potentially cancel your print.</p><p>Reconnecting may cause your printer to reset (depending on its controller board and general setup), which may disrupt ongoing prints, even those running from your printer's internal storage.</p>"),
+                        question: gettext("Are you sure you wish to proceed?"),
+                        cancel: gettext("Stay Connected"),
+                        proceed: gettext("Disconnect"),
+                        onproceed: function() {
+                            self.requestData();
+                            OctoPrint.connection.disconnect();
+                        }
+                    });
+                }
+
             }
         };
 

@@ -129,6 +129,7 @@ def getSettings():
 			"modelSizeDetection": s.getBoolean(["feature", "modelSizeDetection"]),
 			"firmwareDetection": s.getBoolean(["feature", "firmwareDetection"]),
 			"printCancelConfirmation": s.getBoolean(["feature", "printCancelConfirmation"]),
+			"disconnectConfirmation": s.getBoolean(["feature", "disconnectConfirmation"]),
 			"blockWhileDwelling": s.getBoolean(["feature", "blockWhileDwelling"]),
 			"g90InfluencesExtruder": s.getBoolean(["feature", "g90InfluencesExtruder"])
 		},
@@ -356,6 +357,7 @@ def _saveSettings(data):
 		if "modelSizeDetection" in data["feature"]: s.setBoolean(["feature", "modelSizeDetection"], data["feature"]["modelSizeDetection"])
 		if "firmwareDetection" in data["feature"]: s.setBoolean(["feature", "firmwareDetection"], data["feature"]["firmwareDetection"])
 		if "printCancelConfirmation" in data["feature"]: s.setBoolean(["feature", "printCancelConfirmation"], data["feature"]["printCancelConfirmation"])
+		if "disconnectConfirmation" in data["feature"]: s.setBoolean(["feature", "disconnectConfirmation"], data["feature"]["disconnectConfirmation"])		
 		if "blockWhileDwelling" in data["feature"]: s.setBoolean(["feature", "blockWhileDwelling"], data["feature"]["blockWhileDwelling"])
 		if "g90InfluencesExtruder" in data["feature"]: s.setBoolean(["feature", "g90InfluencesExtruder"], data["feature"]["g90InfluencesExtruder"])
 
