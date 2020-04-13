@@ -220,8 +220,7 @@ FileAdded
 
    .. note::
 
-      A copied file triggers this for its new path. A moved file first triggers ``FileRemoved`` for its original
-      path and then ``FileAdded`` for the new one.
+      A copied file triggers this for its new path. A moved file will trigger ``FileMoved`` but for backwards compatbility it will also triggers ``FileRemoved`` for its original path and then ``FileAdded`` for the new one.
 
 FileRemoved
    A file has been removed from a storage.
@@ -235,7 +234,26 @@ FileRemoved
 
    .. note::
 
-      A moved file first triggers ``FileRemoved`` for its original path and then ``FileAdded`` for the new one.
+      A moved file will trigger ``FileMoved`` but for backwards compatbility it will also triggers ``FileRemoved`` for its original path and then ``FileAdded`` for the new one.
+
+FileMoved
+   A file has been moved.
+
+   Payload:
+     * ``src_storage``: the storage's identifier
+     * ``src_path``: the file's path within its storage location
+     * ``src_name``: the file's name
+     * ``src_type``: the file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
+       ``["model", "stl"]``
+     * ``dst_storage``: the storage's identifier
+     * ``dst_path``: the file's path within its storage location
+     * ``dst_name``: the file's name
+     * ``dst_type``: the file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
+       ``["model", "stl"]``
+
+   .. note::
+
+      For backwards compatability a moved file will also trigger a ``FileRemoved`` for its original path and then ``FileAdded`` for the new one.
 
 FolderAdded
    A folder has been added to a storage.
@@ -261,6 +279,20 @@ FolderRemoved
    .. note::
 
       A moved folder first triggers ``FolderRemoved`` for its original path and then ``FolderAdded`` for the new one.
+
+FolderMoved
+   A folder has been moved.
+
+   Payload:
+     * ``src_storage``: the storage's identifier
+     * ``src_path``: the folder's path within its storage location
+     * ``src_name``: the folder's name
+     * ``dst_storage``: the storage's identifier
+     * ``dst_path``: the folder's path within its storage location
+     * ``dst_name``: the folder's name
+   .. note::
+
+      For backwards compatability a moved folder will also trigger ``FolderRemoved`` for its original path and then ``FolderAdded`` for the new one.
 
 UpdatedFiles
    A file list was modified.

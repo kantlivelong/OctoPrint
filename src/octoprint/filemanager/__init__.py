@@ -552,6 +552,16 @@ class FileManager(object):
 		dst_path_in_storage = self._storage(destination).path_in_storage(dst)
 		_, dst_name = self._storage(destination).split_path(dst_path_in_storage)
 
+		# Keep FILE_REMOVED and UPDATED_FILES events for backwards compatability.
+		eventManager().fire(Events.FILE_MOVED, dict(src_storage=destination,
+		                                            src_path=source_path_in_storage,
+		                                            src_name=source_name,
+		                                            src_type=get_file_type(source_name),
+		                                            dst_storage=destination,
+		                                            dst_path=dst_path_in_storage,
+		                                            dst_name=dst_name,
+		                                            dst_type=get_file_type(dst_name)
+		                                            ))
 		eventManager().fire(Events.FILE_REMOVED, dict(storage=destination,
 		                                              path=source_path_in_storage,
 		                                              name=source_name,
@@ -605,6 +615,13 @@ class FileManager(object):
 		_, source_name = self._storage(destination).split_path(source_path_in_storage)
 		_, dst_name = self._storage(destination).split_path(dst_path_in_storage)
 
+		# Keep FOLDER_REMOVED and FOLDER_ADDED events for backwards compatability.		
+		eventManager().fire(Events.FOLDER_MOVED, dict(src_storage=destination,
+		                                              src_path=source_path_in_storage,
+		                                              src_name=source_name,
+		                                              dst_storage=destination,
+		                                              dst_path=dst_path_in_storage,
+		                                              dst_name=dst_name))
 		eventManager().fire(Events.FOLDER_REMOVED, dict(storage=destination,
 		                                                path=source_path_in_storage,
 		                                                name=source_name))

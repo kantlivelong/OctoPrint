@@ -64,8 +64,10 @@ class Events(object):
 
 	FILE_ADDED = "FileAdded"
 	FILE_REMOVED = "FileRemoved"
+	FILE_MOVED = "FileMoved"
 	FOLDER_ADDED = "FolderAdded"
 	FOLDER_REMOVED = "FolderRemoved"
+	FOLDER_MOVED = "FolderMoved"
 
 	# SD Upload
 	TRANSFER_STARTED = "TransferStarted"
