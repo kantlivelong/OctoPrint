@@ -645,6 +645,12 @@ class WsgiInputContainer(object):
 			headers.append((header, value))
 		headers = [(header, value) for header, value in headers if not header.lower() in self.removed_headers]
 
+		if True: #Setting to enable?
+			gzip = tornado.web.GZipContentEncoding(request)
+			gzip_headers = dict((k, v) for k, v in headers)
+			status_code, gzip_headers, body = gzip.transform_first_chunk(status_code, gzip_headers, body, finishing = True)
+			headers = [(n, v) for n, v in gzip_headers.items()]
+
 		start_line = tornado.httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
 		header_obj = tornado.httputil.HTTPHeaders()
 		for key, value in headers:

@@ -250,7 +250,7 @@ class Server(object):
 		global safe_mode
 
 		from tornado.ioloop import IOLoop
-		from tornado.web import Application
+		from tornado.web import Application, GZipContentEncoding
 
 		debug = self._debug
 		safe_mode = self._safe_mode
@@ -739,6 +739,9 @@ class Server(object):
 		transforms = [util.tornado.GlobalHeaderTransform.for_headers("OctoPrintGlobalHeaderTransform",
 		                                                             headers=headers,
 		                                                             removed_headers=removed_headers)]
+
+		if True: #Setting to enable?
+			transforms.append(GZipContentEncoding)
 
 		self._tornado_app = Application(handlers=server_routes,
 		                                transforms=transforms)
