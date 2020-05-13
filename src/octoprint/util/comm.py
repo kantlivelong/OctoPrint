@@ -616,11 +616,11 @@ class MachineCom(object):
 		self._jobLock = threading.RLock()
 		self._sendingLock = threading.RLock()
 
-		# monitoring thread
-		self._monitoring_active = True
-		self.monitoring_thread = threading.Thread(target=self._monitor, name="comm._monitor")
-		self.monitoring_thread.daemon = True
-		self.monitoring_thread.start()
+		# connecting thread
+		self._connecting_active = True
+		self.connecting_thread = threading.Thread(target=self._connect, name="comm._connect")
+		self.connecting_thread.daemon = True
+		self.connecting_thread.start()
 
 		# sending thread
 		self._send_queue_active = True
@@ -1624,8 +1624,128 @@ class MachineCom(object):
 			actual, target = parsedTemps[key]
 			self.last_temperature.set_custom(key, actual=actual, target=target)
 
-	##~~ Serial monitor processing received messages
 
+	##~~ Serial connection
+	def _connect(self):
+		self._consecutive_timeouts = 0
+		try_hello = not settings().getBoolean(["serial", "waitForStartOnConnect"])
+
+		self._changeState(self.STATE_DETECT_SERIAL)
+
+
+		potentials = []
+		if self._port is None or self._port == 'AUTO':
+			if self._baudrate == 0:
+				for p in serialList():
+					potentials.append((p, baudrateList()[0]))
+			else:
+				for p in serialList():
+					potentials.append((p, self._baudrate))
+		else:
+			if self._baudrate == 0:
+				potentials.append((self._port, baudrateList()[0]))
+			else:
+				potentials.append((self._port, self._baudrate))
+
+		# enqueue the "hello command" first thing
+		if try_hello:
+			self.sayHello()
+
+			# we send a second one right away because sometimes there's garbage on the line on first connect
+			# that can kill oks
+			self.sayHello()
+
+		supportWait = settings().getBoolean(["serial", "supportWait"])
+		startSeen = False
+
+		potentials_i = 1
+		p_port, p_baud = potentials[0]
+		while self._connecting_active:
+			if potentials_i > len(potentials):
+				break
+
+			if not self._serial:
+				self._log("Trying %s @ %s" % (p_port, p_baud))
+				if self._openSerial(p_port, p_baud):
+					self._log("Connected to %s @ %s" % (p_port, p_baud))
+					if self._baudrate == 0:
+						try_hello = False
+						self._log("Starting baud rate detection...")
+						self._changeState(self.STATE_DETECT_BAUDRATE)
+
+						# Some controllers (e.g. Original Prusa) don't appear to like too fast serial interaction after
+						# open, so let's wait a bit before the first baudrate detection step
+						time.sleep(settings().getFloat(["serial", "timeout", "baudrateDetectionPause"]))
+
+						self._perform_baudrate_detection_step(init=True)
+					else:
+						self._changeState(self.STATE_CONNECTING)
+				else:
+					p_port, p_baud = potentials[potentials_i]
+					potentials_i += 1
+
+			if self._state == self.STATE_OPERATIONAL:
+				# start the monitoring thread
+				self._monitoring_active = True
+				self.monitoring_thread = threading.Thread(target=self._monitor, name="comm._monitor")
+				self.monitoring_thread.daemon = True
+				self.monitoring_thread.start()
+
+				self._connecting_active = False
+				return
+
+			try:
+				line = self._readline()
+				if line is None:
+					break
+
+				self._log("%s" % line)
+
+				now = monotonic_time()
+
+				if line.strip() != "":
+					self._consecutive_timeouts = 0
+					self._timeout = self._get_new_communication_timeout()
+
+				### Baudrate detection
+				if self._state == self.STATE_DETECT_BAUDRATE:
+					if line == '' or monotonic_time() > self._timeout:
+						self._perform_baudrate_detection_step()
+					elif 'start' in line or line.startswith('ok'):
+						self._onConnected()
+						if 'start' in line:
+							self._clear_to_send.set()
+
+				### Connection attempt
+				elif self._state == self.STATE_CONNECTING:
+					if "start" in line and not startSeen:
+						startSeen = True
+						self.sayHello()
+					elif line.startswith("ok") or (supportWait and line == "wait"):
+						if line == "wait":
+							# if it was a wait we probably missed an ok, so let's simulate that now
+							self._handle_ok()
+						self._onConnected()
+					elif monotonic_time() > self._timeout:
+						if try_hello and self._hello_sent < 3:
+							self._log("No answer from the printer within the connection timeout, trying another hello")
+							self.sayHello()
+						else:
+							self._log("There was a timeout while trying to connect to the printer")
+							self.close(wait=False)
+			except Exception:
+				self._logger.exception("Something crashed inside the serial connection loop, please report this in OctoPrint's bug tracker:")
+
+				errorMsg = "See octoprint.log for details"
+				self._log(errorMsg)
+				self._errorValue = errorMsg
+				eventManager().fire(Events.ERROR, {"error": self.getErrorString(), "reason": "crash"})
+				self.close(is_error=True)
+
+		if not self._monitoring_active:
+			self._log("Connection closed, closing down connection")
+
+	##~~ Serial monitor processing received messages
 	def _monitor(self):
 		feedback_controls, feedback_matcher = convert_feedback_controls(settings().get(["controls"]))
 		feedback_errors = []
@@ -1635,40 +1755,12 @@ class MachineCom(object):
 
 		self._consecutive_timeouts = 0
 
-		#Open the serial port.
-		if not self._openSerial():
-			return
-
-		try_hello = not settings().getBoolean(["serial", "waitForStartOnConnect"])
-
-		self._log("Connected to: %s, starting monitor" % self._serial)
-		if self._baudrate == 0:
-			try_hello = False
-			self._log("Starting baud rate detection...")
-			self._changeState(self.STATE_DETECT_BAUDRATE)
-
-			# Some controllers (e.g. Original Prusa) don't appear to like too fast serial interaction after
-			# open, so let's wait a bit before the first baudrate detection step
-			time.sleep(settings().getFloat(["serial", "timeout", "baudrateDetectionPause"]))
-
-			self._perform_baudrate_detection_step(init=True)
-		else:
-			self._changeState(self.STATE_CONNECTING)
-
 		#Start monitoring the serial port.
 		self._timeout = self._ok_timeout = self._get_new_communication_timeout()
 
 		startSeen = False
 		supportRepetierTargetTemp = settings().getBoolean(["serial", "repetierTargetTemp"])
 		supportWait = settings().getBoolean(["serial", "supportWait"])
-
-		# enqueue the "hello command" first thing
-		if try_hello:
-			self.sayHello()
-
-			# we send a second one right away because sometimes there's garbage on the line on first connect
-			# that can kill oks
-			self.sayHello()
 
 		while self._monitoring_active:
 			try:
@@ -2193,35 +2285,8 @@ class MachineCom(object):
 					elif "toggle" in pause_triggers and pause_triggers["toggle"].search(line) is not None:
 						self.setPause(not self.isPaused())
 
-				### Baudrate detection
-				if self._state == self.STATE_DETECT_BAUDRATE:
-					if line == '' or monotonic_time() > self._timeout:
-						self._perform_baudrate_detection_step()
-					elif 'start' in line or line.startswith('ok'):
-						self._onConnected()
-						if 'start' in line:
-							self._clear_to_send.set()
-
-				### Connection attempt
-				elif self._state == self.STATE_CONNECTING:
-					if "start" in line and not startSeen:
-						startSeen = True
-						self.sayHello()
-					elif line.startswith("ok") or (supportWait and line == "wait"):
-						if line == "wait":
-							# if it was a wait we probably missed an ok, so let's simulate that now
-							self._handle_ok()
-						self._onConnected()
-					elif monotonic_time() > self._timeout:
-						if try_hello and self._hello_sent < 3:
-							self._log("No answer from the printer within the connection timeout, trying another hello")
-							self.sayHello()
-						else:
-							self._log("There was a timeout while trying to connect to the printer")
-							self.close(wait=False)
-
 				### Operational (idle or busy)
-				elif self._state in (self.STATE_OPERATIONAL,
+				if self._state in (self.STATE_OPERATIONAL,
 				                     self.STATE_STARTING,
 				                     self.STATE_PRINTING,
 				                     self.STATE_PAUSED,
@@ -2645,56 +2710,16 @@ class MachineCom(object):
 			finally:
 				self._command_queue.task_done()
 
-	def _detect_port(self):
-		potentials = serialList()
-		self._log("Serial port list: %s" % (str(potentials)))
-
-		if len(potentials) == 1:
-			# short cut: only one port, let's try that
-			return potentials[0]
-
-		elif len(potentials) > 1:
-			programmer = stk500v2.Stk500v2()
-
-			for p in potentials:
-				serial_obj = None
-
-				try:
-					self._log("Trying {}".format(p))
-					programmer.connect(p)
-					serial_obj = programmer.leaveISP()
-				except Exception as e:
-					self._log("Could not connect to or enter programming mode on {}, might not be a printer or just not allow programming mode".format(p))
-					self._logger.info("Could not enter programming mode on {}: {}".format(p, e))
-
-				found = serial_obj is not None
-				programmer.close()
-
-				if found:
-					return p
-
-		return None
-
-	def _openSerial(self):
+	def _openSerial(self, port = None, baudrate = None):
 		def default(_, port, baudrate, read_timeout):
-			if port is None or port == 'AUTO':
-				# no known port, try auto detection
-				self._changeState(self.STATE_DETECT_SERIAL)
-				port = self._detect_port()
-				if port is None:
-					error_text = "Failed to autodetect serial port, please set it manually."
-					self._trigger_error(error_text, "autodetect_port")
-					self._log(error_text)
-					return None
-
-			# connect to regular serial port
-			self._log("Connecting to: %s" % port)
-
 			serial_port_args = {
-				"baudrate": baudrateList()[0] if baudrate == 0 else baudrate,
 				"timeout": read_timeout,
 				"write_timeout": 0,
 			}
+
+			self._log("Connecting to: %s @ %s" % (port, baudrate))
+
+			serial_port_args['baudrate'] = baudrate
 
 			if settings().getBoolean(["serial", "exclusive"]):
 				serial_port_args["exclusive"] = True
@@ -2705,13 +2730,19 @@ class MachineCom(object):
 			use_parity_workaround = settings().get(["serial", "useParityWorkaround"])
 			needs_parity_workaround = get_os() == "linux" and os.path.exists("/etc/debian_version") # See #673
 
-			if use_parity_workaround == "always" or (needs_parity_workaround and use_parity_workaround == "detect"):
-				serial_obj.parity = serial.PARITY_ODD
-				serial_obj.open()
-				serial_obj.close()
-				serial_obj.parity = serial.PARITY_NONE
+			try:
+				if use_parity_workaround == "always" or (needs_parity_workaround and use_parity_workaround == "detect"):
+					serial_obj.parity = serial.PARITY_ODD
+					serial_obj.open()
+					serial_obj.close()
+					serial_obj.parity = serial.PARITY_NONE
 
-			serial_obj.open()
+				serial_obj.open()
+			except serial.SerialException:
+				pass
+
+			if not serial_obj.isOpen():
+				return None
 
 			# Set close_exec flag on serial handle, see #3212
 			if hasattr(serial_obj, "fd"):
@@ -2727,7 +2758,7 @@ class MachineCom(object):
 		serial_factories = list(self._serial_factory_hooks.items()) + [("default", default)]
 		for name, factory in serial_factories:
 			try:
-				serial_obj = factory(self, self._port, self._baudrate, settings().getFloat(["serial", "timeout", "connection"]))
+				serial_obj = factory(self, port, baudrate, settings().getFloat(["serial", "timeout", "connection"]))
 			except Exception:
 				exception_string = get_exception_string()
 				self._trigger_error("Connection error, see Terminal tab", "connection")
