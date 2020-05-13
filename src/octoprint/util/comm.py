@@ -1627,6 +1627,8 @@ class MachineCom(object):
 
 	##~~ Serial connection
 	def _connect(self):
+		self._monitoring_active = False
+
 		self._consecutive_timeouts = 0
 		try_hello = not settings().getBoolean(["serial", "waitForStartOnConnect"])
 
