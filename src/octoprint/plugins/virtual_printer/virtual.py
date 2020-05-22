@@ -1635,3 +1635,47 @@ class CharCountingQueue(queue.Queue):
 
 	def _will_it_fit(self, item):
 		return self.maxsize - self._qsize() >= self._len(item)
+
+
+if __name__ == "__main__":
+#sudo socat PTY,link=/dev/ttySV0 PTY,link=/dev/ttySV1
+#sudo chgrp dialout $(readlink -f /dev/ttySV?)
+#sudo chmod 660 $(readlink -f /dev/ttySV?)
+	import serial
+
+	from octoprint import init_settings
+	from octoprint.plugin import PluginSettings
+	from octoprint.plugins.virtual_printer import VirtualPrinterPlugin
+	from octoprint.plugin import plugin_manager
+
+	_settings = init_settings('/home/shawn/src/OctoPrint/.octoprint', '/home/shawn/src/OctoPrint/.octoprint/config.yaml')
+	_plugin_manager = plugin_manager(init=True)
+
+	_plugin = VirtualPrinterPlugin()
+	_plugin._settings = PluginSettings(_settings, 'virtualprinter')
+
+	_virtual_serial = _plugin.virtual_printer_factory(None, 'VIRTUAL', None, _settings.getFloat(["serial", "timeout", "connection"]))
+
+	try:
+		_serial = serial.Serial(port='/dev/ttyUSB1', baudrate=115200, write_timeout=0, timeout=1)
+		_serial.flushInput()
+	except (IOError, serial.SerialException) as e:
+		print(e)
+		exit(1)
+
+	try:
+		while True:
+			if _serial.inWaiting() > 0:
+				rx_s = _serial.readline()
+				rx_s += "\r\n".encode("utf-8")
+				_virtual_serial.write(rx_s)
+				print(rx_s[:-2:])
+
+			while len(_virtual_serial.outgoing.queue) > 0:
+				rx_v = _virtual_serial.readline()
+				rx_v += "\r\n".encode("utf-8")
+				_serial.write(rx_v)
+				print(rx_v[:-2:])
+
+	except IOError:
+		print("Some IO Error found, exiting...")
