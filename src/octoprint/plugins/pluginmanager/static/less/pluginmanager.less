@@ -46,6 +46,51 @@
   }
 }
 
+#settings_plugin_pluginmanager_hook_order {
+  table {
+    th,
+    td {
+      &.settings_plugin_plugin_manager_hook_order_name {
+        text-overflow: ellipsis;
+        text-align: left;
+
+        .prop {
+          white-space: nowrap;
+        }
+      }
+
+      &.settings_plugin_plugin_manager_hook_order_definition {
+        text-align: left;
+        width: 80px;
+      }
+
+      &.settings_plugin_plugin_manager_hook_order_order {
+        text-align: left;
+        width: 80px;
+
+        .modified {
+          color: red;
+        }
+      }
+
+      &.settings_plugin_plugin_manager_hook_order_actions {
+        text-align: center;
+        width: 80px;
+
+        a {
+          text-decoration: none;
+          color: #000;
+
+          &.disabled {
+            color: #ccc;
+            cursor: default;
+          }
+        }
+      }
+    }
+  }
+}
+
 #settings_plugin_pluginmanager_orphanlist {
   display: block;
   width: auto;

@@ -36,6 +36,7 @@ import pkg_resources
 import pkginfo
 from past.builtins import unicode
 
+from octoprint.settings import settings
 from octoprint.util import sv, time_this, to_unicode
 from octoprint.util.version import get_python_version_string, is_python_compatible
 
@@ -1676,6 +1677,13 @@ class PluginManager(object):
                 )
                 continue
 
+            if not order:
+                order = 1000
+
+            override = settings().getInt(["plugins", name, "_hook_order_overrides", hook])
+            if override:
+                order = override
+
             self._plugin_hooks[hook].append((order, name, callback))
             self._sort_hooks(hook)
 
@@ -1718,6 +1726,9 @@ class PluginManager(object):
                     )
                 )
                 continue
+
+            if not order:
+                order = 1000
 
             try:
                 self._plugin_hooks[hook].remove((order, name, callback))
@@ -2167,11 +2178,12 @@ class PluginManager(object):
                                 impl[0], sorting_context
                             )
                         )
-                        sorting_value = None
+                        sorting_value = 1000
+                else:
+                    sorting_value = 1000
 
             plugin_info = self.get_plugin_info(impl[0], require_enabled=False)
             return (
-                sorting_value is None,
                 sv(sorting_value),
                 not plugin_info.bundled if plugin_info else True,
                 sv(impl[0]),
@@ -2265,7 +2277,7 @@ class PluginManager(object):
     def _sort_hooks(self, hook):
         self._plugin_hooks[hook] = sorted(
             self._plugin_hooks[hook],
-            key=lambda x: (x[0] is None, sv(x[0]), sv(x[1]), sv(x[2])),
+            key=lambda x: (sv(x[0]), sv(x[1]), sv(x[2])),
         )
 
     def _get_callback_and_order(self, hook):

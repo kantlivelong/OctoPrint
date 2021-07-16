@@ -47,6 +47,9 @@
         <a href="#settings_plugin_pluginmanager_plugins" data-toggle="tab">{{ _('Plugins') }}</a>
     </li>
     <li>
+        <a href="#settings_plugin_pluginmanager_hook_order" data-toggle="tab">{{ _('Hook Order') }}</a>
+    </li>
+    <li>
         <a href="#settings_plugin_pluginmanager_cleanup" data-toggle="tab">{{ _('Cleanup') }}</a>
     </li>
 </ul>
@@ -151,6 +154,50 @@
                 </tbody>
             </table>
         </div>
+    </div>
+    <div class="tab-pane" id="settings_plugin_pluginmanager_hook_order">
+        <div class="pull-right">
+            <button class="btn btn-small" data-bind="click: function() { $root.undoHookChanges() }" title="{{ _('Undo All')|edq }}"><i class="fas fa-undo"></i></button>
+        </div>
+
+        <h3>{{ _('Hook Order') }}</h3>
+        <div data-bind="foreach: hookOrder">
+            <div><h4><span data-bind="text: name"></span></h4></div>
+
+            <table class="table table-striped table-hover table-condensed table-hover">
+                <thead>
+                <tr>
+                    <th class="settings_plugin_plugin_manager_hook_order_name">{{ _('Plugin') }}</th>
+                    <th class="settings_plugin_plugin_manager_hook_order_definition">{{ _('Definition') }}</th>
+                    <th class="settings_plugin_plugin_manager_hook_order_order">{{ _('Order') }}</th>
+                    <th class="settings_plugin_plugin_manager_hook_order_actions">{{ _('Actions') }}</th>
+                </tr>
+                </thead>
+                <tbody data-bind="foreach: hooks">
+                <tr>
+                    <td class="settings_plugin_plugin_manager_hook_order_name">
+                        <div><span data-bind="text: name, attr:{title:id}"></span></div>
+                    </td>
+                    <td class="settings_plugin_plugin_manager_hook_order_definition">
+                        <div><span data-bind="text: order_original() ? order_original() : 'Default'"></span></div>
+                    </td>
+                    <td class="settings_plugin_plugin_manager_hook_order_order">
+                        <div>
+                            <input type="number" class="input-mini" data-bind="visible: orderTemp(), value: orderTemp">
+                            <span data-bind="visible: !orderTemp(), class: orderStaged() ? 'modified' : '', text: orderStaged() ? orderStaged() : order_current(), click: function () { $root.enterHookOrderEdit($data); }"></span>
+                        </div>
+                    </td>
+                    <td class="settings_plugin_plugin_manager_hook_order_actions">
+                        <a href="javascript:void(0)" class="fas fa-edit" title="{{ _('Edit')|edq }}" data-bind="visible: !orderTemp(), click: function () { $root.enterHookOrderEdit($data); }"></a></a>
+                        <a href="javascript:void(0)" class="fas fa-times" title="{{ _('Cancel')|edq }}" data-bind="visible: orderTemp(), click: function () { $root.cancelHookOrderEdit($data); }"></a>
+                        |
+                        <a href="javascript:void(0)" class="fas fa-undo" title="{{ _('Undo')|edq }}" data-bind="visible: !orderTemp(), css: {disabled: (orderStaged() == false)}, click: function () { $root.undoHookChanges($data); }"></a>
+                        <a href="javascript:void(0)" class="fas fa-check" title="{{ _('Confirm')|edq }}" data-bind="visible: orderTemp(), click: function () { $root.confirmHookOrderEdit($data); }"></a></a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+       </div>
     </div>
     <div class="tab-pane" id="settings_plugin_pluginmanager_cleanup">
         <div class="pull-right">

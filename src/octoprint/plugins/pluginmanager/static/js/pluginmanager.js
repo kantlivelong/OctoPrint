@@ -205,6 +205,8 @@ $(function () {
         self.safeMode = ko.observable();
         self.online = ko.observable();
 
+        self.hookOrder = ko.observableArray([]);
+
         self.requestError = ko.observable(false);
 
         self.pipUseUserString = ko.pureComputed(function () {
@@ -578,6 +580,18 @@ $(function () {
             }
         };
 
+        self.fromHookOrderResponse = function (data) {
+            // TODO: Could be worth filtering this out as sorting certain hooks makes no difference.
+            for (i = 0; i < data.length; i++) {
+                for (ii = 0; ii < data[i]["hooks"].length; ii++) {
+                    data[i]["hooks"][ii]["orderStaged"] = false;
+                    data[i]["hooks"][ii]["orderTemp"] = false;
+                }
+            }
+            ko.mapping.fromJS(data, {}, self.hookOrder);
+            self.sortHooks();
+        };
+
         self.dataPluginsDeferred = undefined;
         self.requestPluginData = function (options) {
             if (!_.isPlainObject(options)) {
@@ -704,6 +718,49 @@ $(function () {
 
                     self.fromRepositoryResponse(data.repository);
                     self.online(data.online !== undefined ? data.online : true);
+                    deferred.resolveWith(data);
+                });
+
+            return deferred.promise();
+        };
+
+        self.dataHookOrderDeferred = undefined;
+        self.requestHookOrderData = function (options) {
+            if (!_.isPlainObject(options)) {
+                options = {};
+            }
+
+            if (
+                self.dataHookOrderDeferred &&
+                self.dataHookOrderDeferred.state() === "pending" &&
+                !!!options.refresh
+            ) {
+                return self.dataHookOrderDeferred.promise();
+            }
+
+            var deferred = new $.Deferred();
+            if (!!!options.refresh) {
+                self.dataHookOrderDeferred = deferred;
+            }
+
+            if (
+                !self.loginState.hasPermission(
+                    self.access.permissions.PLUGIN_PLUGINMANAGER_MANAGE
+                )
+            ) {
+                deferred.fail();
+                return deferred.promise();
+            }
+
+            OctoPrint.plugins.pluginmanager
+                .getHooks(!!options.refresh)
+                .fail(function () {
+                    self.requestError(true);
+                    deferred.reject();
+                })
+                .done(function (data) {
+                    self.requestError(false);
+                    self.fromHookOrderResponse(data.hook_order);
                     deferred.resolveWith(data);
                 });
 
@@ -1066,6 +1123,77 @@ $(function () {
                 onproceed: performCleanup,
                 nofade: true
             });
+        };
+
+        self._getHookEntryOrder = function (hook) {
+            if (hook.orderStaged() === false) {
+                return hook.order_current();
+            } else {
+                return hook.orderStaged();
+            }
+        };
+
+        self.sortHooks = function () {
+            var hookGroupNames = [];
+            for (var k = 0; k < self.hookOrder().length; k++) {
+                hookGroupNames.push(self.hookOrder()[k]["name"]());
+            }
+
+            for (var k = 0; k < hookGroupNames.length; k++) {
+                var groupIdx = self.hookOrder().findIndex(function (o) {
+                    return o.name() == this;
+                }, hookGroupNames[k]);
+
+                self.hookOrder()[groupIdx]["hooks"].sort(function (left, right) {
+                    leftOrder = self._getHookEntryOrder(left);
+                    rightOrder = self._getHookEntryOrder(right);
+
+                    if (leftOrder == rightOrder) {
+                        if (left.name() <= right.name()) {
+                            return -1;
+                        } else {
+                            return 1;
+                        }
+                    } else {
+                        if (leftOrder <= rightOrder) {
+                            return -1;
+                        } else {
+                            return 1;
+                        }
+                    }
+                });
+            }
+        };
+
+        self.enterHookOrderEdit = function (data) {
+            data.orderTemp(self._getHookEntryOrder(data));
+        };
+
+        self.cancelHookOrderEdit = function (data) {
+            data.orderTemp(false);
+        };
+
+        self.confirmHookOrderEdit = function (data) {
+            if (data.orderTemp() != self._getHookEntryOrder(data)) {
+                data.orderStaged(parseInt(data.orderTemp()));
+            }
+            data.orderTemp(false);
+
+            self.sortHooks();
+        };
+
+        self.undoHookChanges = function (hook) {
+            if (hook === undefined) {
+                for (var k = 0; k < self.hookOrder().length; k++) {
+                    for (var kk = 0; kk < self.hookOrder()[k]["hooks"]().length; kk++) {
+                        self.hookOrder()[k]["hooks"]()[kk].orderStaged(false);
+                    }
+                }
+            } else {
+                hook.orderStaged(false);
+            }
+
+            self.sortHooks();
         };
 
         self.refreshRepository = function () {
@@ -1733,6 +1861,34 @@ $(function () {
             self.settings = self.settingsViewModel.settings;
         };
 
+        self.onSettingsHidden = function () {
+            self.undoHookChanges();
+        };
+
+        self.onSettingsBeforeSave = function () {
+            var changes = [];
+            for (var k = 0; k < self.hookOrder().length; k++) {
+                var hookGroup = self.hookOrder()[k]["name"]();
+
+                for (var kk = 0; kk < self.hookOrder()[k]["hooks"]().length; kk++) {
+                    var hook = self.hookOrder()[k]["hooks"]()[kk];
+                    if (hook["orderStaged"]()) {
+                        changes.push({
+                            hook: hookGroup,
+                            id: hook["id"](),
+                            value: hook["orderStaged"]()
+                        });
+                    }
+                }
+            }
+
+            if (changes.length > 0) {
+                var data = {hooks: changes};
+                OctoPrint.simpleApiCommand("pluginmanager", "update_hook_order", data);
+                self.requestHookOrderData();
+            }
+        };
+
         self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
             if (
                 self.loginState.hasPermission(
@@ -1753,6 +1909,7 @@ $(function () {
             ) {
                 self.requestRepositoryData();
                 self.requestOrphanData();
+                self.requestHookOrderData();
             }
         };
 

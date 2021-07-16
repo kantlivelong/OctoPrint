@@ -73,6 +73,11 @@
         return this.base.get(url + (refresh ? "?refresh=true" : ""), opts);
     };
 
+    OctoPrintPluginManagerClient.prototype.getHooks = function (refresh, opts) {
+        var url = this.base.getBlueprintUrl("pluginmanager") + "hooks";
+        return this.base.get(url + (refresh ? "?refresh=true" : ""), opts);
+    };
+
     OctoPrintPluginManagerClient.prototype.install = function (
         pluginUrl,
         dependencyLinks,

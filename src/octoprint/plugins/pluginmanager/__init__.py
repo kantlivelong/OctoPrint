@@ -588,6 +588,38 @@ class PluginManagerPlugin(
             unless=lambda: refresh,
         )(view)()
 
+    def _hooks_response(self):
+        return {"hook_order": self._get_hook_order()}
+
+    @octoprint.plugin.BlueprintPlugin.route("/hooks")
+    @Permissions.PLUGIN_PLUGINMANAGER_MANAGE.require(403)
+    def retrieve_hooks(self):
+        refresh = request.values.get("refresh", "false") in valid_boolean_trues
+
+        def view():
+            return jsonify(**self._hooks_response())
+
+        def etag():
+            import hashlib
+
+            hash = hashlib.sha1()
+
+            def hash_update(value):
+                value = value.encode("utf-8")
+                hash.update(value)
+
+            hash_update(repr(self._get_hook_order()))
+            return hash.hexdigest()
+
+        def condition():
+            return check_etag(etag())
+
+        return with_revalidation_checking(
+            etag_factory=lambda *args, **kwargs: etag(),
+            condition=lambda *args, **kwargs: condition(),
+            unless=lambda: refresh,
+        )(view)()
+
     def is_blueprint_protected(self):
         return False
 
@@ -615,6 +647,7 @@ class PluginManagerPlugin(
             "cleanup": ["plugin"],
             "cleanup_all": [],
             "refresh_repository": [],
+            "update_hook_order": ["hooks"],
         }
 
     def on_api_command(self, command, data):
@@ -678,6 +711,22 @@ class PluginManagerPlugin(
 
             plugin = self._plugin_manager.plugins[plugin_name]
             return self.command_toggle(plugin, command)
+
+        elif command == "update_hook_order":
+            for hook in data["hooks"]:
+                # TODO: Force really needed?
+                self._settings.global_set_int(
+                    ["plugins", hook["id"], "_hook_order_overrides", hook["hook"]],
+                    hook["value"],
+                    force=True,
+                )
+                self._set_hook_order(hook["hook"], hook["id"], hook["value"])
+                self._logger.info(
+                    "Updated hook order for {}-{}={}".format(
+                        hook["id"], hook["hook"], hook["value"]
+                    )
+                )
+            self._settings.save()
 
     @deprecated(
         "Deprecated API endpoint api/plugin/pluginmanager used. "
@@ -1991,6 +2040,38 @@ class PluginManagerPlugin(
                 )
 
         return reconnect_hooks
+
+    def _set_hook_order(self, hook, plugin, value):
+        for i in range(len(self._plugin_manager._plugin_hooks[hook])):
+            if self._plugin_manager._plugin_hooks[hook][i][1] == plugin:
+                self._plugin_manager._plugin_hooks[hook][i] = (
+                    value,
+                    plugin,
+                    self._plugin_manager._plugin_hooks[hook],
+                )
+                return
+
+    def _get_hook_order(self):
+        result = []
+        for hook_name, hooks in self._plugin_manager._plugin_hooks.items():
+            order = dict(name=hook_name, hooks=[])
+            for order_current, plugin_id, _hook in hooks:
+                plugin_name = self._plugin_manager.plugins[plugin_id].name
+
+                _, order_original = self._plugin_manager._get_callback_and_order(
+                    self._plugin_manager.plugins[plugin_id].hooks[hook_name]
+                )
+
+                order["hooks"].append(
+                    dict(
+                        id=plugin_id,
+                        name=plugin_name,
+                        order_current=order_current,
+                        order_original=order_original,
+                    )
+                )
+            result.append(order)
+        return result
 
     def _get_plugins(self):
         plugins = self._plugin_manager.plugins
